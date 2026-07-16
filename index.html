@@ -118,13 +118,19 @@
       <div class="bar">
         <span class="stat">rows in <b id="nIn">&ndash;</b></span>
         <span class="stat">rows out <b id="nOut">&ndash;</b></span>
+        <span class="stat">visible <b id="nVis">&ndash;</b></span>
         <span class="stat">removed <b id="nRem">&ndash;</b></span>
         <span class="spacer"></span>
         <button class="btn" id="copyBtn" disabled>Copy</button>
         <button class="btn" id="dlSelBtn" disabled>Download selected</button>
         <button class="btn primary" id="dlBtn" disabled>Download all</button>
       </div>
-      <div class="filterrow"><input id="filter" placeholder="filter results&hellip;"></div>
+      <div class="filterrow" style="display:grid;grid-template-columns:1fr 110px 110px 150px;gap:8px">
+        <input id="filter" placeholder="filter results&hellip;">
+        <input id="rateFrom" type="number" step="any" min="0" placeholder="rate from" title="Minimum rate">
+        <input id="rateTo" type="number" step="any" min="0" placeholder="rate to" title="Maximum rate">
+        <input id="dateFrom" type="date" title="Only rates effective on/after this date" style="color-scheme:dark">
+      </div>
       <div class="tblwrap">
         <table>
           <thead><tr><th style="width:34px"><input type="checkbox" id="selAll" style="accent-color:var(--amber);cursor:pointer"></th><th>Zone</th><th>Interconnect</th><th style="text-align:right">Rate</th><th>Effective date</th></tr></thead>
@@ -327,13 +333,26 @@ function updateButtons(){
 let selected = new Set();   // indices into result[]
 function filteredIdx(){
   const f=norm($("filter").value||"");
+  const rmin=parseFloat($("rateFrom").value), rmax=parseFloat($("rateTo").value);
+  const hasRange=!isNaN(rmin)||!isNaN(rmax);
+  const dv=$("dateFrom").value;
+  const dmin=dv?new Date(dv+"T00:00:00").getTime():null;
   return result.map((r,i)=>i).filter(i=>{
     const r=result[i];
-    return !f||norm(r.zone+" "+r.plan+" "+r.rate).includes(f);
+    if(f && !norm(r.zone+" "+r.plan+" "+r.rate).includes(f)) return false;
+    if(hasRange){
+      const v=parseFloat(r.rate);
+      if(isNaN(v)) return false;                 // Blocked rows excluded when a range is set
+      if(!isNaN(rmin)&&v<rmin) return false;
+      if(!isNaN(rmax)&&v>rmax) return false;
+    }
+    if(dmin!==null && r.ts<dmin) return false;
+    return true;
   });
 }
 function render(){
   const idxs=filteredIdx();
+  $("nVis").textContent=result.length?idxs.length:"\u2013";
   if(!idxs.length){
     $("tbody").innerHTML='<tr><td colspan="5"><div class="empty">'+(result.length?"No rows match this filter.":"No rows in output.")+'</div></td></tr>';
     $("selAll").checked=false;
@@ -443,6 +462,7 @@ $("excReset").onclick=()=>{
   saveExc(); renderChips(); runPipeline();
 };
 $("filter").oninput=render;
+$("rateFrom").oninput=$("rateTo").oninput=$("dateFrom").oninput=$("dateFrom").onchange=render;
 $("atx").checked=atxDefault;
 if(!storageOK) $("excNote").innerHTML += ' <span style="color:var(--red)">Auto-save unavailable in this browser &mdash; use Export/Import to keep your exceptions.</span>';
 renderChips();
