@@ -70,6 +70,29 @@
   .filterrow input:focus{outline:none;border-color:var(--amber)}
   .toast{position:fixed;bottom:22px;right:22px;background:var(--green);color:#08130d;font-weight:600;font-size:13px;padding:10px 16px;border-radius:8px;opacity:0;transform:translateY(8px);transition:.25s;pointer-events:none}
   .toast.show{opacity:1;transform:none}
+  /* test request */
+  .testbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;padding:9px 10px;background:var(--panel2);border:1px solid var(--line);border-radius:8px}
+  .testbar .tlabel{font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);font-weight:600}
+  .testbar select,.testbar input{background:var(--bg);border:1px solid var(--line);border-radius:6px;color:var(--ink);padding:7px 9px;font-size:12.5px;font-family:var(--mono)}
+  .testbar #aniValue{width:220px}
+  .anichk{display:inline-flex;align-items:center;gap:5px;font-size:12.5px;color:var(--ink);padding:5px 9px;border:1px solid var(--line);border-radius:999px;cursor:pointer;user-select:none}
+  .anichk:has(input:checked){border-color:var(--amber);color:var(--amber);background:rgba(242,163,60,.07)}
+  .anichk input{accent-color:var(--amber);cursor:pointer;margin:0}
+  .testbar select:focus,.testbar input:focus{outline:none;border-color:var(--amber)}
+  .modal{position:fixed;inset:0;background:rgba(5,8,12,.7);display:none;align-items:center;justify-content:center;padding:16px;z-index:50}
+  .modal.open{display:flex}
+  .mbox{background:var(--panel);border:1px solid var(--line);border-radius:12px;width:100%;max-width:760px;max-height:90vh;display:flex;flex-direction:column}
+  .mhead{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--line)}
+  .mhead h3{font-size:15px;font-weight:600}
+  .mclose{background:none;border:none;color:var(--dim);font-size:22px;cursor:pointer;line-height:1}
+  .mclose:hover{color:var(--red)}
+  .mfields{padding:12px 16px 4px;display:grid;gap:8px}
+  .mfields div{display:flex;align-items:center;gap:10px}
+  .mfields span{width:60px;font-size:12px;color:var(--dim)}
+  .mfields input{flex:1;background:var(--panel2);border:1px solid var(--line);border-radius:6px;color:var(--ink);padding:7px 10px;font-size:13px}
+  .mfields input:focus{outline:none;border-color:var(--amber)}
+  .mprev{margin:10px 16px;background:#fff;color:#222;border-radius:8px;padding:18px;overflow:auto;flex:1;font-family:Arial,Helvetica,sans-serif;font-size:14px}
+  .mfoot{display:flex;align-items:center;gap:8px;padding:12px 16px;border-top:1px solid var(--line);flex-wrap:wrap}
 </style>
 </head>
 <body>
@@ -131,6 +154,17 @@
         <input id="rateTo" type="number" step="any" min="0" placeholder="rate to" title="Maximum rate">
         <input id="dateFrom" type="date" title="Only rates effective on/after this date" style="color-scheme:dark">
       </div>
+      <div class="testbar">
+        <span class="tlabel">Test ANI</span>
+        <label class="anichk"><input type="checkbox" class="ani" value="EU" checked> EU</label>
+        <label class="anichk"><input type="checkbox" class="ani" value="Local"> Local</label>
+        <label class="anichk"><input type="checkbox" class="ani" value="Non Local"> Non Local</label>
+        <label class="anichk"><input type="checkbox" class="ani" value="US"> US</label>
+        <label class="anichk"><input type="checkbox" id="aniSpecific"> Specific</label>
+        <input id="aniValue" placeholder="ANI(s), comma separated" style="display:none">
+        <span class="spacer"></span>
+        <button class="btn primary" id="testBtn" disabled>Generate test request</button>
+      </div>
       <div class="tblwrap">
         <table>
           <thead><tr><th style="width:34px"><input type="checkbox" id="selAll" style="accent-color:var(--amber);cursor:pointer"></th><th>Zone</th><th>Interconnect</th><th style="text-align:right">Rate</th><th>Effective date</th></tr></thead>
@@ -141,6 +175,25 @@
   </div>
 </div>
 <div class="toast" id="toast">Copied</div>
+
+<div class="modal" id="modal">
+  <div class="mbox">
+    <div class="mhead">
+      <h3>Test request</h3>
+      <button class="mclose" id="mClose" title="Close">&times;</button>
+    </div>
+    <div class="mfields">
+      <div><span>To</span><input id="mTo" value="testing@munitel.de"></div>
+      <div><span>Subject</span><input id="mSubj"></div>
+    </div>
+    <div class="mprev" id="mPrev"></div>
+    <div class="mfoot">
+      <span class="note" style="margin:0;flex:1">&ldquo;Copy email&rdquo; keeps the table when pasted into Outlook or Gmail. &ldquo;Open in mail app&rdquo; sends a plain text version.</span>
+      <button class="btn" id="mMailto">Open in mail app</button>
+      <button class="btn primary" id="mCopy">Copy email</button>
+    </div>
+  </div>
+</div>
 
 <script>
 // ---------- saved exceptions ----------
@@ -327,6 +380,8 @@ function updateButtons(){
   $("copyBtn").disabled=$("dlBtn").disabled=!result.length;
   $("dlSelBtn").disabled=!selected.size;
   $("dlSelBtn").textContent="Download selected"+(selected.size?" ("+selected.size+")":"");
+  $("testBtn").disabled=!selected.size;
+  $("testBtn").textContent="Generate test request"+(selected.size?" ("+selected.size+")":"");
 }
 
 // ---------- rendering ----------
@@ -461,6 +516,88 @@ $("excReset").onclick=()=>{
   supExc=[...DEFAULT_SUP]; planExc=[...DEFAULT_PLAN]; $("atx").checked=true;
   saveExc(); renderChips(); runPipeline();
 };
+// ---------- test request email ----------
+function aniList(){
+  const list=[...document.querySelectorAll(".ani")].filter(c=>c.checked).map(c=>c.value+" ANI");
+  if($("aniSpecific").checked){
+    $("aniValue").value.split(/[,;\s]+/).map(s=>s.trim()).filter(Boolean).forEach(a=>list.push(a));
+  }
+  return list;
+}
+function aniText(){
+  const l=aniList();
+  if(l.length<=1) return l[0]||"";
+  return l.slice(0,-1).join(", ")+" and "+l[l.length-1];
+}
+function buildTestEmail(){
+  const rows=result.filter((r,i)=>selected.has(i));
+  const ani=aniText();
+  const many=aniList().length>1;
+  const dest=[...new Set(rows.map(r=>r.zone.split(/[ -]/)[0]))].join(", ");
+  const subj="Test request - "+dest+" - "+aniList().join(" / ");
+  const th='style="border:1px solid #9aa4b1;padding:6px 12px;background:#e8edf3;text-align:left;font-family:Arial,sans-serif;font-size:13px"';
+  const td='style="border:1px solid #9aa4b1;padding:6px 12px;font-family:Arial,sans-serif;font-size:13px"';
+  const html=
+    '<div style="font-family:Arial,sans-serif;font-size:14px;color:#222">'
+    +'<p>Dear Testing Team,</p>'
+    +'<p>Please test the below routes using <b>'+esc(ani)+'</b>:</p>'
+    +'<table style="border-collapse:collapse;margin:10px 0">'
+    +'<tr><th '+th+'>Zone</th><th '+th+'>Interconnect</th><th '+th+'>Rate</th></tr>'
+    +rows.map(r=>'<tr><td '+td+'>'+esc(r.zone)+'</td><td '+td+'>'+esc(r.plan)+'</td><td '+td+'>'+esc(r.rate)+'</td></tr>').join("")
+    +'</table>'
+    +'<p>Thank you.</p></div>';
+  // plain-text version (aligned columns) for mailto / plain clipboard
+  const w1=Math.max(4,...rows.map(r=>r.zone.length)), w2=Math.max(12,...rows.map(r=>r.plan.length));
+  const line=(a,b,c)=>a.padEnd(w1)+"  |  "+b.padEnd(w2)+"  |  "+c;
+  const text="Dear Testing Team,\n\nPlease test the below routes using "+ani+":\n\n"
+    +line("Zone","Interconnect","Rate")+"\n"+"-".repeat(w1+w2+16)+"\n"
+    +rows.map(r=>line(r.zone,r.plan,r.rate)).join("\n")
+    +"\n\nThank you.";
+  return {subj,html,text};
+}
+let currentEmail=null;
+$("aniSpecific").onchange=()=>{
+  const sp=$("aniSpecific").checked;
+  $("aniValue").style.display=sp?"":"none";
+  if(sp) $("aniValue").focus();
+};
+$("testBtn").onclick=()=>{
+  if(!selected.size) return;
+  if($("aniSpecific").checked && !$("aniValue").value.trim()){
+    alert("Please enter the specific ANI to use."); $("aniValue").focus(); return;
+  }
+  if(!aniList().length){ alert("Please select at least one ANI."); return; }
+  currentEmail=buildTestEmail();
+  $("mSubj").value=currentEmail.subj;
+  $("mPrev").innerHTML=currentEmail.html;
+  $("modal").classList.add("open");
+};
+$("mClose").onclick=()=>$("modal").classList.remove("open");
+$("modal").onclick=e=>{ if(e.target===$("modal")) $("modal").classList.remove("open"); };
+$("mCopy").onclick=async()=>{
+  if(!currentEmail) return;
+  try{
+    await navigator.clipboard.write([new ClipboardItem({
+      "text/html":new Blob([currentEmail.html],{type:"text/html"}),
+      "text/plain":new Blob([currentEmail.text],{type:"text/plain"})
+    })]);
+  }catch(e){
+    // fallback: select the rendered preview and copy it
+    const range=document.createRange(); range.selectNodeContents($("mPrev"));
+    const sel=window.getSelection(); sel.removeAllRanges(); sel.addRange(range);
+    document.execCommand("copy"); sel.removeAllRanges();
+  }
+  $("toast").textContent="Email copied - paste it into your mail";
+  $("toast").classList.add("show"); setTimeout(()=>{$("toast").classList.remove("show");$("toast").textContent="Copied";},1800);
+};
+$("mMailto").onclick=()=>{
+  if(!currentEmail) return;
+  const url="mailto:"+encodeURIComponent($("mTo").value.trim())
+    +"?subject="+encodeURIComponent($("mSubj").value)
+    +"&body="+encodeURIComponent(currentEmail.text);
+  window.location.href=url;
+};
+
 $("filter").oninput=render;
 $("rateFrom").oninput=$("rateTo").oninput=$("dateFrom").oninput=$("dateFrom").onchange=render;
 $("atx").checked=atxDefault;
