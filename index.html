@@ -75,6 +75,7 @@
   .testbar .tlabel{font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);font-weight:600}
   .testbar select,.testbar input{background:var(--bg);border:1px solid var(--line);border-radius:6px;color:var(--ink);padding:7px 9px;font-size:12.5px;font-family:var(--mono)}
   .testbar #aniValue{width:220px}
+  .testbar .tsep{width:1px;height:22px;background:var(--line);margin:0 4px}
   .anichk{display:inline-flex;align-items:center;gap:5px;font-size:12.5px;color:var(--ink);padding:5px 9px;border:1px solid var(--line);border-radius:999px;cursor:pointer;user-select:none}
   .anichk:has(input:checked){border-color:var(--amber);color:var(--amber);background:rgba(242,163,60,.07)}
   .anichk input{accent-color:var(--amber);cursor:pointer;margin:0}
@@ -162,6 +163,10 @@
         <label class="anichk"><input type="checkbox" class="ani" value="US"> US</label>
         <label class="anichk"><input type="checkbox" id="aniSpecific"> Specific</label>
         <input id="aniValue" placeholder="ANI(s), comma separated" style="display:none">
+        <span class="tsep"></span>
+        <span class="tlabel">Test type</span>
+        <label class="anichk"><input type="checkbox" id="tQuality" checked> Quality</label>
+        <label class="anichk"><input type="checkbox" id="tCli"> CLI display</label>
         <span class="spacer"></span>
         <button class="btn primary" id="testBtn" disabled>Generate test request</button>
       </div>
@@ -188,8 +193,8 @@
     </div>
     <div class="mprev" id="mPrev"></div>
     <div class="mfoot">
-      <span class="note" style="margin:0;flex:1">&ldquo;Copy email&rdquo; keeps the table when pasted into Outlook or Gmail. &ldquo;Open in mail app&rdquo; sends a plain text version.</span>
-      <button class="btn" id="mMailto">Open in mail app</button>
+      <span class="note" style="margin:0;flex:1">&ldquo;Open in Outlook&rdquo; downloads a draft (.eml) &mdash; open it and the email is ready with the table. &ldquo;Copy email&rdquo; is for pasting into Gmail or another mail.</span>
+      <button class="btn" id="mMailto">Open in Outlook</button>
       <button class="btn primary" id="mCopy">Copy email</button>
     </div>
   </div>
@@ -532,15 +537,17 @@ function aniText(){
 function buildTestEmail(){
   const rows=result.filter((r,i)=>selected.has(i));
   const ani=aniText();
-  const many=aniList().length>1;
+  const q=$("tQuality").checked, c=$("tCli").checked;
+  const what = q&&c ? "a quality test and a CLI display test" : c ? "a CLI display test" : "a quality test";
+  const tag  = q&&c ? "Quality + CLI" : c ? "CLI" : "Quality";
   const dest=[...new Set(rows.map(r=>r.zone.split(/[ -]/)[0]))].join(", ");
-  const subj="Test request - "+dest+" - "+aniList().join(" / ");
+  const subj="Test request ("+tag+") - "+dest+" - "+aniList().join(" / ");
   const th='style="border:1px solid #9aa4b1;padding:6px 12px;background:#e8edf3;text-align:left;font-family:Arial,sans-serif;font-size:13px"';
   const td='style="border:1px solid #9aa4b1;padding:6px 12px;font-family:Arial,sans-serif;font-size:13px"';
   const html=
     '<div style="font-family:Arial,sans-serif;font-size:14px;color:#222">'
     +'<p>Dear Testing Team,</p>'
-    +'<p>Please test the below routes using <b>'+esc(ani)+'</b>:</p>'
+    +'<p>Please run '+what+' on the below routes using <b>'+esc(ani)+'</b>:</p>'
     +'<table style="border-collapse:collapse;margin:10px 0">'
     +'<tr><th '+th+'>Zone</th><th '+th+'>Interconnect</th><th '+th+'>Rate</th></tr>'
     +rows.map(r=>'<tr><td '+td+'>'+esc(r.zone)+'</td><td '+td+'>'+esc(r.plan)+'</td><td '+td+'>'+esc(r.rate)+'</td></tr>').join("")
@@ -549,7 +556,7 @@ function buildTestEmail(){
   // plain-text version (aligned columns) for mailto / plain clipboard
   const w1=Math.max(4,...rows.map(r=>r.zone.length)), w2=Math.max(12,...rows.map(r=>r.plan.length));
   const line=(a,b,c)=>a.padEnd(w1)+"  |  "+b.padEnd(w2)+"  |  "+c;
-  const text="Dear Testing Team,\n\nPlease test the below routes using "+ani+":\n\n"
+  const text="Dear Testing Team,\n\nPlease run "+what+" on the below routes using "+ani+":\n\n"
     +line("Zone","Interconnect","Rate")+"\n"+"-".repeat(w1+w2+16)+"\n"
     +rows.map(r=>line(r.zone,r.plan,r.rate)).join("\n")
     +"\n\nThank you.";
@@ -567,6 +574,7 @@ $("testBtn").onclick=()=>{
     alert("Please enter the specific ANI to use."); $("aniValue").focus(); return;
   }
   if(!aniList().length){ alert("Please select at least one ANI."); return; }
+  if(!$("tQuality").checked && !$("tCli").checked){ alert("Please select at least one test type (Quality or CLI)."); return; }
   currentEmail=buildTestEmail();
   $("mSubj").value=currentEmail.subj;
   $("mPrev").innerHTML=currentEmail.html;
@@ -590,12 +598,29 @@ $("mCopy").onclick=async()=>{
   $("toast").textContent="Email copied - paste it into your mail";
   $("toast").classList.add("show"); setTimeout(()=>{$("toast").classList.remove("show");$("toast").textContent="Copied";},1800);
 };
+// .eml draft: Outlook opens it as a new unsent message with the HTML table intact
+function b64utf8(s){
+  const bytes=new TextEncoder().encode(s);
+  let bin=""; for(let i=0;i<bytes.length;i++) bin+=String.fromCharCode(bytes[i]);
+  return btoa(bin);
+}
 $("mMailto").onclick=()=>{
   if(!currentEmail) return;
-  const url="mailto:"+encodeURIComponent($("mTo").value.trim())
-    +"?subject="+encodeURIComponent($("mSubj").value)
-    +"&body="+encodeURIComponent(currentEmail.text);
-  window.location.href=url;
+  const body='<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body>'+currentEmail.html+'</body></html>';
+  const eml=[
+    "To: "+$("mTo").value.trim(),
+    "Subject: =?UTF-8?B?"+b64utf8($("mSubj").value)+"?=",
+    "X-Unsent: 1",
+    "MIME-Version: 1.0",
+    "Content-Type: text/html; charset=UTF-8",
+    "Content-Transfer-Encoding: base64",
+    "",
+    b64utf8(body).replace(/(.{76})/g,"$1\r\n")
+  ].join("\r\n");
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(new Blob([eml],{type:"message/rfc822"}));
+  a.download=($("mSubj").value||"test_request").replace(/[\\/:*?"<>|]+/g,"_")+".eml";
+  a.click();
 };
 
 $("filter").oninput=render;
