@@ -76,6 +76,29 @@
   .testbar select,.testbar input{background:var(--bg);border:1px solid var(--line);border-radius:6px;color:var(--ink);padding:7px 9px;font-size:12.5px;font-family:var(--mono)}
   .testbar #aniValue{width:220px}
   .testbar .tsep{width:1px;height:22px;background:var(--line);margin:0 4px}
+  /* views */
+  header{align-items:center;flex-wrap:wrap}
+  .views{display:flex;gap:4px;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:3px}
+  .vtab{background:none;border:none;color:var(--dim);padding:7px 14px;border-radius:6px;font-size:12.5px;cursor:pointer}
+  .vtab.on{background:var(--amber);color:#161006;font-weight:700}
+  [hidden]{display:none!important}
+  /* reference lists */
+  .ref{border:1px solid var(--line);border-radius:8px;padding:12px;margin-bottom:12px;background:var(--panel2)}
+  .refhead{display:flex;align-items:center;justify-content:space-between;font-size:13.5px}
+  .refcount{font-family:var(--mono);font-size:11.5px;color:var(--dim)}
+  .refcount.ok{color:var(--green)}
+  .refmeta{font-size:11.5px;color:var(--dim);margin:6px 0 10px;line-height:1.45;word-break:break-word}
+  .refbtns{display:flex;gap:8px}
+  .refbtns .btn{flex:1;padding:7px 4px;font-size:12px}
+  /* manual table */
+  .mantbl td{padding:5px 8px}
+  .mantbl input{width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:6px;color:var(--ink);padding:7px 9px;font-size:12.5px;font-family:var(--mono)}
+  .mantbl input:focus{outline:none;border-color:var(--amber)}
+  .mantbl input.unknown{border-color:var(--amber-dim)}
+  .mantbl .act{white-space:nowrap;text-align:right}
+  .mantbl .act button{background:none;border:1px solid var(--line);border-radius:6px;color:var(--dim);cursor:pointer;width:28px;height:28px;font-size:14px;margin-left:4px}
+  .mantbl .act button:hover{color:var(--amber);border-color:var(--amber)}
+  .mantbl .act button.del:hover{color:var(--red);border-color:var(--red)}
   .anichk{display:inline-flex;align-items:center;gap:5px;font-size:12.5px;color:var(--ink);padding:5px 9px;border:1px solid var(--line);border-radius:999px;cursor:pointer;user-select:none}
   .anichk:has(input:checked){border-color:var(--amber);color:var(--amber);background:rgba(242,163,60,.07)}
   .anichk input{accent-color:var(--amber);cursor:pointer;margin:0}
@@ -93,17 +116,24 @@
   .mfields input{flex:1;background:var(--panel2);border:1px solid var(--line);border-radius:6px;color:var(--ink);padding:7px 10px;font-size:13px}
   .mfields input:focus{outline:none;border-color:var(--amber)}
   .mprev{margin:10px 16px;background:#fff;color:#222;border-radius:8px;padding:18px;overflow:auto;flex:1;font-family:Arial,Helvetica,sans-serif;font-size:14px}
+  .mprev p{margin:0 0 12px}
   .mfoot{display:flex;align-items:center;gap:8px;padding:12px 16px;border-top:1px solid var(--line);flex-wrap:wrap}
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
 <div class="wrap">
   <header>
     <h1>LCR <span>Cleaner</span></h1>
     <div class="sub">upload system export &rarr; clean &rarr; grouped LCR output</div>
+    <span class="spacer"></span>
+    <nav class="views">
+      <button class="vtab on" id="vLcr">LCR cleaner</button>
+      <button class="vtab" id="vMan">Manual test request</button>
+    </nav>
   </header>
 
-  <div class="grid">
+  <div class="grid" id="viewLcr">
     <div>
       <div class="panel" style="margin-bottom:18px">
         <h2>1 &middot; Upload export</h2>
@@ -155,7 +185,7 @@
         <input id="rateTo" type="number" step="any" min="0" placeholder="rate to" title="Maximum rate">
         <input id="dateFrom" type="date" title="Only rates effective on/after this date" style="color-scheme:dark">
       </div>
-      <div class="testbar">
+      <div id="lcrTestSlot"><div class="testbar" id="testbar">
         <span class="tlabel">Test ANI</span>
         <label class="anichk"><input type="checkbox" class="ani" value="EU" checked> EU</label>
         <label class="anichk"><input type="checkbox" class="ani" value="Local"> Local</label>
@@ -167,9 +197,10 @@
         <span class="tlabel">Test type</span>
         <label class="anichk"><input type="checkbox" id="tQuality" checked> Quality</label>
         <label class="anichk"><input type="checkbox" id="tCli"> CLI display</label>
+        <label class="anichk"><input type="checkbox" id="tRtp"> RTP</label>
         <span class="spacer"></span>
         <button class="btn primary" id="testBtn" disabled>Generate test request</button>
-      </div>
+      </div></div>
       <div class="tblwrap">
         <table>
           <thead><tr><th style="width:34px"><input type="checkbox" id="selAll" style="accent-color:var(--amber);cursor:pointer"></th><th>Zone</th><th>Interconnect</th><th style="text-align:right">Rate</th><th>Effective date</th></tr></thead>
@@ -178,7 +209,54 @@
       </div>
     </div>
   </div>
+
+  <!-- ===== Manual test request view ===== -->
+  <div class="grid" id="viewMan" hidden>
+    <div class="panel">
+      <h2>Reference lists</h2>
+      <div class="ref">
+        <div class="refhead"><b>Supplier trunks</b><span class="refcount" id="refTrunkCount">none</span></div>
+        <div class="refmeta" id="refTrunkMeta">Upload a CSV, TXT or Excel file with your trunk names.</div>
+        <div class="refbtns">
+          <button class="btn" id="refTrunkUp">Upload</button>
+          <button class="btn" id="refTrunkClr">Clear</button>
+          <input type="file" id="refTrunkFile" accept=".csv,.txt,.xlsx,.xls" hidden>
+        </div>
+      </div>
+      <div class="ref">
+        <div class="refhead"><b>Master code list</b><span class="refcount" id="refZoneCount">none</span></div>
+        <div class="refmeta" id="refZoneMeta">Upload the master code list; the zone names are kept.</div>
+        <div class="refbtns">
+          <button class="btn" id="refZoneUp">Upload</button>
+          <button class="btn" id="refZoneClr">Clear</button>
+          <input type="file" id="refZoneFile" accept=".csv,.txt,.xlsx,.xls" hidden>
+        </div>
+      </div>
+      <div class="note" id="refNote">Lists are saved in this browser and stay until you replace or clear them. Uploading a new file replaces the old list.</div>
+    </div>
+
+    <div class="panel">
+      <h2>Routes to test</h2>
+      <div class="bar">
+        <span class="stat">routes <b id="manCount">0</b></span>
+        <span class="spacer"></span>
+        <button class="btn" id="manClear">Clear all</button>
+        <button class="btn primary" id="manAdd">+ Add route</button>
+      </div>
+      <div id="manTestSlot"></div>
+      <div class="tblwrap">
+        <table class="mantbl">
+          <thead><tr><th style="width:46%">Supplier trunk</th><th>Zone</th><th style="width:110px">Rate</th><th style="width:76px"></th></tr></thead>
+          <tbody id="manBody"></tbody>
+        </table>
+      </div>
+      <div class="note">Start typing in a cell to search your saved lists. A name that isn&rsquo;t in a list is outlined in amber, but you can still use it. Use &#x2398; to copy a row when one trunk needs several zones.</div>
+    </div>
+  </div>
 </div>
+
+<datalist id="dlTrunks"></datalist>
+<datalist id="dlZones"></datalist>
 <div class="toast" id="toast">Copied</div>
 
 <div class="modal" id="modal">
@@ -241,7 +319,7 @@ const norm = s => s.trim().toLowerCase().replace(/\s+/g," ");
 const supplierOf = p => p.split(" - ")[0].trim();
 
 // ---------- CSV parsing (handles quoted fields) ----------
-function parseCSV(text){
+function parseCSV(text, d=",", keepSingle=false){
   const rows=[]; let row=[], cur="", q=false;
   for(let i=0;i<text.length;i++){
     const c=text[i];
@@ -250,13 +328,13 @@ function parseCSV(text){
       else cur+=c;
     }else{
       if(c==='"') q=true;
-      else if(c===','){row.push(cur);cur="";}
+      else if(c===d){row.push(cur);cur="";}
       else if(c==='\n'){row.push(cur);rows.push(row);row=[];cur="";}
       else if(c!=='\r') cur+=c;
     }
   }
   if(cur.length||row.length){row.push(cur);rows.push(row);}
-  return rows.filter(r=>r.length>1&&r.some(x=>x.trim()!==""));
+  return rows.filter(r=>(keepSingle||r.length>1)&&r.some(x=>x.trim()!==""));
 }
 
 function parseDate(s){ // dd/mm/yyyy hh:mm  (time optional)
@@ -385,8 +463,7 @@ function updateButtons(){
   $("copyBtn").disabled=$("dlBtn").disabled=!result.length;
   $("dlSelBtn").disabled=!selected.size;
   $("dlSelBtn").textContent="Download selected"+(selected.size?" ("+selected.size+")":"");
-  $("testBtn").disabled=!selected.size;
-  $("testBtn").textContent="Generate test request"+(selected.size?" ("+selected.size+")":"");
+  refreshTestBtn();
 }
 
 // ---------- rendering ----------
@@ -521,6 +598,207 @@ $("excReset").onclick=()=>{
   supExc=[...DEFAULT_SUP]; planExc=[...DEFAULT_PLAN]; $("atx").checked=true;
   saveExc(); renderChips(); runPipeline();
 };
+// ---------- manual test request ----------
+let view="lcr";
+let refs={trunks:[],zones:[],trunkFile:"",zoneFile:"",trunkDate:"",zoneDate:""};
+let manRows=[];
+let trunkSet=new Set(), zoneSet=new Set();
+const TRUNK_KEYS=["trunk","interconnect","rating plan","plan","supplier","carrier","vendor","name"];
+const ZONE_KEYS=["routing zone","zone","destination","description","country","name"];
+
+function loadRefs(){
+  try{
+    const r=localStorage.getItem("lcr_refs");
+    if(r) refs={...refs,...JSON.parse(r)};
+    const m=localStorage.getItem("lcr_manual_rows");
+    if(m) manRows=(JSON.parse(m)||[]).filter(x=>x&&typeof x==="object");
+  }catch(e){}
+}
+function saveRefs(){
+  try{ localStorage.setItem("lcr_refs",JSON.stringify(refs)); return true; }catch(e){ return false; }
+}
+function saveManRows(){
+  try{ localStorage.setItem("lcr_manual_rows",JSON.stringify(manRows)); }catch(e){}
+}
+
+// read CSV / TXT / Excel into a 2D array
+function readTable(file){
+  return new Promise((resolve,reject)=>{
+    const ext=(file.name.split(".").pop()||"").toLowerCase();
+    const rd=new FileReader();
+    if(ext==="xlsx"||ext==="xls"){
+      if(typeof XLSX==="undefined"){
+        reject(new Error("Excel files need an internet connection when the app opens. Save the file as CSV and upload that instead."));
+        return;
+      }
+      rd.onload=()=>{
+        try{
+          const wb=XLSX.read(new Uint8Array(rd.result),{type:"array"});
+          const ws=wb.Sheets[wb.SheetNames[0]];
+          resolve(XLSX.utils.sheet_to_json(ws,{header:1,raw:false,defval:""}).map(r=>r.map(c=>String(c))));
+        }catch(e){ reject(new Error("Could not read this Excel file.")); }
+      };
+      rd.readAsArrayBuffer(file);
+    }else{
+      rd.onload=()=>{
+        const text=String(rd.result).replace(/^﻿/,"");
+        const first=text.split(/\r?\n/)[0]||"";
+        const cnt=ch=>first.split(ch).length-1;
+        const d=[",",";","\t"].reduce((a,b)=>cnt(b)>cnt(a)?b:a,",");
+        resolve(parseCSV(text,d,true));
+      };
+      rd.readAsText(file);
+    }
+  });
+}
+const isNumericish=v=>/^[\d\s+().\-\/]+$/.test(v.trim());
+function textColumn(rows,c){
+  let txt=0,num=0;
+  for(const r of rows){ const v=(r[c]||"").trim(); if(!v) continue; isNumericish(v)?num++:txt++; }
+  return txt>=num;
+}
+function pickColumn(rows,keys){
+  if(!rows.length) return [];
+  const head=rows[0].map(h=>norm(String(h)));
+  const body=rows.slice(1);
+  for(const k of keys){
+    const i=head.findIndex((h,ix)=>h.includes(k)&&textColumn(body,ix));
+    if(i>=0) return body.map(r=>r[i]||"");
+  }
+  // no recognisable header: take the column with the most text values (all rows)
+  const ncol=Math.max(...rows.map(r=>r.length));
+  let best=0,score=-1;
+  for(let c=0;c<ncol;c++){
+    const s=rows.reduce((a,r)=>a+((r[c]||"").trim()&&!isNumericish(r[c])?1:0),0);
+    if(s>score){score=s;best=c;}
+  }
+  return rows.map(r=>r[best]||"");
+}
+function uniqueClean(vals){
+  const seen=new Map();
+  for(const v of vals){
+    const t=String(v).trim().replace(/\s+/g," ");
+    if(!t) continue;
+    const k=t.toLowerCase();
+    if(!seen.has(k)) seen.set(k,t);
+  }
+  return [...seen.values()].sort((a,b)=>a.localeCompare(b));
+}
+async function uploadRef(kind,file){
+  if(!file) return;
+  try{
+    const rows=await readTable(file);
+    const vals=uniqueClean(pickColumn(rows, kind==="trunks"?TRUNK_KEYS:ZONE_KEYS));
+    if(!vals.length){ alert("No names were found in "+file.name+"."); return; }
+    refs[kind]=vals;
+    const today=new Date().toLocaleDateString("en-GB");
+    if(kind==="trunks"){ refs.trunkFile=file.name; refs.trunkDate=today; }
+    else { refs.zoneFile=file.name; refs.zoneDate=today; }
+    if(!saveRefs()) alert("Loaded "+vals.length+" names, but this browser could not save them. They will be gone when the app is closed.");
+    renderRefs(); renderMan();
+    $("toast").textContent=vals.length+(kind==="trunks"?" trunks":" zones")+" saved";
+    $("toast").classList.add("show"); setTimeout(()=>{$("toast").classList.remove("show");$("toast").textContent="Copied";},1600);
+  }catch(e){ alert(e.message||"Could not read this file."); }
+}
+function renderRefs(){
+  const t=refs.trunks.length, z=refs.zones.length;
+  $("refTrunkCount").textContent=t?t+" trunks":"none";
+  $("refTrunkCount").classList.toggle("ok",!!t);
+  $("refTrunkMeta").textContent=t?refs.trunkFile+" · saved "+refs.trunkDate:"Upload a CSV, TXT or Excel file with your trunk names.";
+  $("refZoneCount").textContent=z?z+" zones":"none";
+  $("refZoneCount").classList.toggle("ok",!!z);
+  $("refZoneMeta").textContent=z?refs.zoneFile+" · saved "+refs.zoneDate:"Upload the master code list; the zone names are kept.";
+  $("dlTrunks").innerHTML=refs.trunks.map(v=>'<option value="'+esc(v)+'">').join("");
+  $("dlZones").innerHTML=refs.zones.map(v=>'<option value="'+esc(v)+'">').join("");
+  trunkSet=new Set(refs.trunks.map(v=>v.toLowerCase()));
+  zoneSet=new Set(refs.zones.map(v=>v.toLowerCase()));
+}
+function markUnknown(inp){
+  const f=inp.dataset.f, v=inp.value.trim().toLowerCase();
+  const set=f==="trunk"?trunkSet:f==="zone"?zoneSet:null;
+  inp.classList.toggle("unknown", !!(set&&set.size&&v&&!set.has(v)));
+  inp.title=inp.classList.contains("unknown")?"Not in your saved "+(f==="trunk"?"trunk list":"master code list"):"";
+}
+function manualValidRows(){
+  return manRows.filter(r=>(r.trunk||"").trim()&&(r.zone||"").trim())
+    .map(r=>({zone:r.zone.trim(), plan:r.trunk.trim(), rate:(r.rate||"").trim()||"-"}));
+}
+function updateManCount(){
+  $("manCount").textContent=manualValidRows().length;
+  refreshTestBtn();
+}
+function renderMan(focus){
+  if(!manRows.length){
+    $("manBody").innerHTML='<tr><td colspan="4"><div class="empty">No routes yet. Click &ldquo;+ Add route&rdquo; to start.</div></td></tr>';
+  }else{
+    $("manBody").innerHTML=manRows.map((r,i)=>'<tr data-i="'+i+'">'
+      +'<td><input list="dlTrunks" data-f="trunk" value="'+esc(r.trunk||"")+'" placeholder="search trunk&hellip;" autocomplete="off"></td>'
+      +'<td><input list="dlZones" data-f="zone" value="'+esc(r.zone||"")+'" placeholder="search zone&hellip;" autocomplete="off"></td>'
+      +'<td><input data-f="rate" inputmode="decimal" value="'+esc(r.rate||"")+'" placeholder="0.0000"></td>'
+      +'<td class="act"><button class="dup" title="Copy row (same trunk, new zone)">&#x2398;</button><button class="del" title="Remove route">&times;</button></td></tr>').join("");
+    $("manBody").querySelectorAll("tr").forEach(tr=>{
+      const i=+tr.dataset.i;
+      tr.querySelectorAll("input").forEach(inp=>{
+        markUnknown(inp);
+        inp.oninput=()=>{ manRows[i][inp.dataset.f]=inp.value; markUnknown(inp); saveManRows(); updateManCount(); };
+        inp.onkeydown=e=>{ if(e.key==="Enter"&&inp.dataset.f==="rate"&&i===manRows.length-1){ e.preventDefault(); addManRow(); } };
+      });
+      tr.querySelector(".dup").onclick=()=>{
+        manRows.splice(i+1,0,{trunk:manRows[i].trunk||"",zone:"",rate:""});
+        saveManRows(); renderMan({row:i+1,f:"zone"});
+      };
+      tr.querySelector(".del").onclick=()=>{
+        manRows.splice(i,1); saveManRows(); renderMan();
+      };
+    });
+    if(focus){
+      const el=$("manBody").querySelector('tr[data-i="'+focus.row+'"] input[data-f="'+focus.f+'"]');
+      if(el) el.focus();
+    }
+  }
+  updateManCount();
+}
+function addManRow(){
+  manRows.push({trunk:"",zone:"",rate:""});
+  saveManRows(); renderMan({row:manRows.length-1,f:"trunk"});
+}
+function refreshTestBtn(){
+  const n = view==="man" ? manualValidRows().length : selected.size;
+  $("testBtn").disabled=!n;
+  $("testBtn").textContent="Generate test request"+(n?" ("+n+")":"");
+}
+function setView(v){
+  view=v;
+  $("viewLcr").hidden = v!=="lcr";
+  $("viewMan").hidden = v!=="man";
+  $("vLcr").classList.toggle("on",v==="lcr");
+  $("vMan").classList.toggle("on",v==="man");
+  (v==="man"?$("manTestSlot"):$("lcrTestSlot")).appendChild($("testbar"));
+  refreshTestBtn();
+}
+$("vLcr").onclick=()=>setView("lcr");
+$("vMan").onclick=()=>setView("man");
+$("refTrunkUp").onclick=()=>$("refTrunkFile").click();
+$("refZoneUp").onclick=()=>$("refZoneFile").click();
+$("refTrunkFile").onchange=e=>{ uploadRef("trunks",e.target.files[0]); e.target.value=""; };
+$("refZoneFile").onchange=e=>{ uploadRef("zones",e.target.files[0]); e.target.value=""; };
+$("refTrunkClr").onclick=()=>{
+  if(!refs.trunks.length||!confirm("Clear the saved supplier trunk list?")) return;
+  refs.trunks=[]; refs.trunkFile=""; refs.trunkDate=""; saveRefs(); renderRefs(); renderMan();
+};
+$("refZoneClr").onclick=()=>{
+  if(!refs.zones.length||!confirm("Clear the saved master code list?")) return;
+  refs.zones=[]; refs.zoneFile=""; refs.zoneDate=""; saveRefs(); renderRefs(); renderMan();
+};
+$("manAdd").onclick=addManRow;
+$("manClear").onclick=()=>{
+  if(!manRows.length||!confirm("Remove all routes from the list?")) return;
+  manRows=[]; saveManRows(); renderMan();
+};
+loadRefs();
+renderRefs();
+renderMan();
+
 // ---------- test request email ----------
 function aniList(){
   const list=[...document.querySelectorAll(".ani")].filter(c=>c.checked).map(c=>c.value+" ANI");
@@ -534,13 +812,32 @@ function aniText(){
   if(l.length<=1) return l[0]||"";
   return l.slice(0,-1).join(", ")+" and "+l[l.length-1];
 }
-function buildTestEmail(){
-  const rows=result.filter((r,i)=>selected.has(i));
+// destination label for the subject: shared leading words of all zones (e.g. "Belgium"),
+// else the zone names if few, else "N destinations"
+function destLabel(rows){
+  const zones=[...new Set(rows.map(r=>r.zone.trim()))];
+  const words=zones.map(z=>z.split(/[\s\-]+/).filter(Boolean));
+  let common=[];
+  for(let i=0;i<(words[0]||[]).length;i++){
+    const w=words[0][i];
+    if(words.every(ws=>ws[i]&&ws[i].toLowerCase()===w.toLowerCase())) common.push(w); else break;
+  }
+  if(common.length) return common.join(" ");
+  if(zones.length<=3) return zones.join(", ");
+  const countries=[...new Set(zones.map(z=>z.split(/\s*[-(]\s*|\s+(?=mobile|fix|fixed|landline)/i)[0].trim()))];
+  return countries.length<=3 ? countries.join(", ") : countries.length+" destinations";
+}
+function buildTestEmail(rows){
+  if(!rows) rows=result.filter((r,i)=>selected.has(i));
   const ani=aniText();
-  const q=$("tQuality").checked, c=$("tCli").checked;
-  const what = q&&c ? "a quality test and a CLI display test" : c ? "a CLI display test" : "a quality test";
-  const tag  = q&&c ? "Quality + CLI" : c ? "CLI" : "Quality";
-  const dest=[...new Set(rows.map(r=>r.zone.split(/[ -]/)[0]))].join(", ");
+  const tests=[];
+  if($("tQuality").checked) tests.push(["a quality test","Quality"]);
+  if($("tCli").checked)     tests.push(["a CLI display test","CLI"]);
+  if($("tRtp").checked)     tests.push(["an RTP test","RTP"]);
+  const phr=tests.map(t=>t[0]);
+  const what = phr.length<=1 ? (phr[0]||"") : phr.slice(0,-1).join(", ")+" and "+phr[phr.length-1];
+  const tag  = tests.map(t=>t[1]).join(" + ");
+  const dest=destLabel(rows);
   const subj="Test request ("+tag+") - "+dest+" - "+aniList().join(" / ");
   const th='style="border:1px solid #9aa4b1;padding:6px 12px;background:#e8edf3;text-align:left;font-family:Arial,sans-serif;font-size:13px"';
   const td='style="border:1px solid #9aa4b1;padding:6px 12px;font-family:Arial,sans-serif;font-size:13px"';
@@ -569,13 +866,17 @@ $("aniSpecific").onchange=()=>{
   if(sp) $("aniValue").focus();
 };
 $("testBtn").onclick=()=>{
-  if(!selected.size) return;
+  const rows = view==="man" ? manualValidRows() : result.filter((r,i)=>selected.has(i));
+  if(!rows.length){
+    if(view==="man") alert("Add at least one route with a supplier trunk and a zone.");
+    return;
+  }
   if($("aniSpecific").checked && !$("aniValue").value.trim()){
     alert("Please enter the specific ANI to use."); $("aniValue").focus(); return;
   }
   if(!aniList().length){ alert("Please select at least one ANI."); return; }
-  if(!$("tQuality").checked && !$("tCli").checked){ alert("Please select at least one test type (Quality or CLI)."); return; }
-  currentEmail=buildTestEmail();
+  if(!$("tQuality").checked && !$("tCli").checked && !$("tRtp").checked){ alert("Please select at least one test type (Quality, CLI or RTP)."); return; }
+  currentEmail=buildTestEmail(rows);
   $("mSubj").value=currentEmail.subj;
   $("mPrev").innerHTML=currentEmail.html;
   $("modal").classList.add("open");
