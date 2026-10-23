@@ -90,6 +90,21 @@
   .refmeta{font-size:11.5px;color:var(--dim);margin:6px 0 10px;line-height:1.45;word-break:break-word}
   .refbtns{display:flex;gap:8px}
   .refbtns .btn{flex:1;padding:7px 4px;font-size:12px}
+  .refbtns .btn.primary{color:#161006}
+  .ref.team{border-color:var(--amber-dim)}
+  .refadd{margin-bottom:8px}
+  .refadd input{font-size:12px;padding:7px 9px}
+  .refadd button{padding:0 12px;font-size:12px}
+  .reflist{max-height:190px;overflow-y:auto;border:1px solid var(--line);border-radius:6px;margin-bottom:8px;background:var(--bg)}
+  .reflist .ri{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:5px 6px 5px 10px;font-family:var(--mono);font-size:11.5px;border-bottom:1px solid rgba(38,52,74,.55)}
+  .reflist .ri:last-child{border-bottom:none}
+  .reflist .ri em{font-style:normal;font-size:10px;color:var(--amber);margin-left:6px}
+  .reflist .ri button{background:none;border:none;color:var(--dim);cursor:pointer;font-size:14px;padding:0 4px}
+  .reflist .ri button:hover{color:var(--red)}
+  .reflist .rempty{padding:10px;font-size:12px;color:var(--dim)}
+  .mantbl .cell{position:relative}
+  .mantbl .cell .save{position:absolute;right:5px;top:50%;transform:translateY(-50%);background:var(--amber);color:#161006;border:none;border-radius:4px;font-size:10.5px;font-weight:700;padding:3px 7px;cursor:pointer}
+  .mantbl .cell input.unknown{padding-right:62px}
   /* manual table */
   .mantbl td{padding:5px 8px}
   .mantbl input{width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:6px;color:var(--ink);padding:7px 9px;font-size:12.5px;font-family:var(--mono)}
@@ -217,8 +232,15 @@
       <div class="ref">
         <div class="refhead"><b>Supplier trunks</b><span class="refcount" id="refTrunkCount">none</span></div>
         <div class="refmeta" id="refTrunkMeta">Upload a CSV, TXT or Excel file with your trunk names.</div>
+        <div class="addrow refadd">
+          <input id="refTrunkAdd" placeholder="new trunk name">
+          <button id="refTrunkAddBtn">Add</button>
+        </div>
+        <div class="reflist" id="refTrunkList" hidden></div>
         <div class="refbtns">
           <button class="btn" id="refTrunkUp">Upload</button>
+          <button class="btn" id="refTrunkShow">Show list</button>
+          <button class="btn" id="refTrunkExp">Export</button>
           <button class="btn" id="refTrunkClr">Clear</button>
           <input type="file" id="refTrunkFile" accept=".csv,.txt,.xlsx,.xls" hidden>
         </div>
@@ -226,13 +248,29 @@
       <div class="ref">
         <div class="refhead"><b>Master code list</b><span class="refcount" id="refZoneCount">none</span></div>
         <div class="refmeta" id="refZoneMeta">Upload the master code list; the zone names are kept.</div>
+        <div class="addrow refadd">
+          <input id="refZoneAdd" placeholder="new zone name">
+          <button id="refZoneAddBtn">Add</button>
+        </div>
+        <div class="reflist" id="refZoneList" hidden></div>
         <div class="refbtns">
           <button class="btn" id="refZoneUp">Upload</button>
+          <button class="btn" id="refZoneShow">Show list</button>
+          <button class="btn" id="refZoneExp">Export</button>
           <button class="btn" id="refZoneClr">Clear</button>
           <input type="file" id="refZoneFile" accept=".csv,.txt,.xlsx,.xls" hidden>
         </div>
       </div>
-      <div class="note" id="refNote">Lists are saved in this browser and stay until you replace or clear them. Uploading a new file replaces the old list.</div>
+      <div class="ref team">
+        <div class="refhead"><b>Team package</b></div>
+        <div class="refmeta">One file with the trunk list, zone list and LCR exceptions. Export it and share it with the team; each person imports it once to get the same setup.</div>
+        <div class="refbtns">
+          <button class="btn primary" id="teamExp">Export package</button>
+          <button class="btn" id="teamImp">Import package</button>
+          <input type="file" id="teamFile" accept=".json" hidden>
+        </div>
+      </div>
+      <div class="note" id="refNote">Lists are saved in this browser. Uploading a new file replaces the file&rsquo;s names but keeps the ones you added by hand. While you type in the add box, the list below filters to show matches.</div>
     </div>
 
     <div class="panel">
@@ -600,7 +638,9 @@ $("excReset").onclick=()=>{
 };
 // ---------- manual test request ----------
 let view="lcr";
-let refs={trunks:[],zones:[],trunkFile:"",zoneFile:"",trunkDate:"",zoneDate:""};
+let refs={trunks:[],zones:[],trunkFile:"",zoneFile:"",trunkDate:"",zoneDate:"",trunkExtra:[],zoneExtra:[]};
+const extraKey=kind=>kind==="trunks"?"trunkExtra":"zoneExtra";
+let refShow={trunks:false,zones:false};
 let manRows=[];
 let trunkSet=new Set(), zoneSet=new Set();
 const TRUNK_KEYS=["trunk","interconnect","rating plan","plan","supplier","carrier","vendor","name"];
@@ -688,8 +728,12 @@ async function uploadRef(kind,file){
   if(!file) return;
   try{
     const rows=await readTable(file);
-    const vals=uniqueClean(pickColumn(rows, kind==="trunks"?TRUNK_KEYS:ZONE_KEYS));
-    if(!vals.length){ alert("No names were found in "+file.name+"."); return; }
+    const fileVals=uniqueClean(pickColumn(rows, kind==="trunks"?TRUNK_KEYS:ZONE_KEYS));
+    if(!fileVals.length){ alert("No names were found in "+file.name+"."); return; }
+    // keep names added by hand; drop them from the "extra" list if the file now has them
+    const inFile=new Set(fileVals.map(v=>v.toLowerCase()));
+    refs[extraKey(kind)]=(refs[extraKey(kind)]||[]).filter(v=>!inFile.has(v.toLowerCase()));
+    const vals=uniqueClean([...fileVals,...refs[extraKey(kind)]]);
     refs[kind]=vals;
     const today=new Date().toLocaleDateString("en-GB");
     if(kind==="trunks"){ refs.trunkFile=file.name; refs.trunkDate=today; }
@@ -700,14 +744,54 @@ async function uploadRef(kind,file){
     $("toast").classList.add("show"); setTimeout(()=>{$("toast").classList.remove("show");$("toast").textContent="Copied";},1600);
   }catch(e){ alert(e.message||"Could not read this file."); }
 }
+function refMeta(kind){
+  const file=kind==="trunks"?refs.trunkFile:refs.zoneFile, date=kind==="trunks"?refs.trunkDate:refs.zoneDate;
+  const extra=(refs[extraKey(kind)]||[]).length;
+  const parts=[];
+  if(file) parts.push(file+" · saved "+date);
+  if(extra) parts.push(extra+" added by hand");
+  return parts.join(" · ");
+}
+function renderRefList(kind){
+  const box=$(kind==="trunks"?"refTrunkList":"refZoneList");
+  $(kind==="trunks"?"refTrunkShow":"refZoneShow").textContent=refShow[kind]?"Hide list":"Show list";
+  box.hidden=!refShow[kind];
+  if(!refShow[kind]) return;
+  const q=norm($(kind==="trunks"?"refTrunkAdd":"refZoneAdd").value||"");
+  const extra=new Set((refs[extraKey(kind)]||[]).map(v=>v.toLowerCase()));
+  const list=refs[kind].filter(v=>!q||v.toLowerCase().includes(q));
+  const shown=list.slice(0,300);
+  box.innerHTML = shown.length
+    ? shown.map(v=>'<div class="ri"><span>'+esc(v)+(extra.has(v.toLowerCase())?'<em>added</em>':'')+'</span><button data-v="'+esc(v)+'" title="Remove from list">&times;</button></div>').join("")
+      +(list.length>shown.length?'<div class="rempty">'+(list.length-shown.length)+' more &mdash; type above to narrow down</div>':'')
+    : '<div class="rempty">'+(refs[kind].length?"No names match.":"The list is empty.")+'</div>';
+  box.querySelectorAll("button").forEach(b=>b.onclick=()=>removeRefName(kind,b.dataset.v));
+}
+function addRefName(kind,name){
+  const v=String(name||"").trim().replace(/\s+/g," ");
+  if(!v) return false;
+  if(refs[kind].some(x=>x.toLowerCase()===v.toLowerCase())) return false;
+  refs[kind]=uniqueClean([...refs[kind],v]);
+  refs[extraKey(kind)]=[...(refs[extraKey(kind)]||[]),v];
+  if(!saveRefs()) alert("Added, but this browser could not save the list.");
+  renderRefs(); renderMan();
+  return true;
+}
+function removeRefName(kind,name){
+  const k=name.toLowerCase();
+  refs[kind]=refs[kind].filter(x=>x.toLowerCase()!==k);
+  refs[extraKey(kind)]=(refs[extraKey(kind)]||[]).filter(x=>x.toLowerCase()!==k);
+  saveRefs(); renderRefs(); renderMan();
+}
 function renderRefs(){
   const t=refs.trunks.length, z=refs.zones.length;
   $("refTrunkCount").textContent=t?t+" trunks":"none";
   $("refTrunkCount").classList.toggle("ok",!!t);
-  $("refTrunkMeta").textContent=t?refs.trunkFile+" · saved "+refs.trunkDate:"Upload a CSV, TXT or Excel file with your trunk names.";
+  $("refTrunkMeta").textContent=refMeta("trunks")||"Upload a CSV, TXT or Excel file, or add names one by one.";
   $("refZoneCount").textContent=z?z+" zones":"none";
   $("refZoneCount").classList.toggle("ok",!!z);
-  $("refZoneMeta").textContent=z?refs.zoneFile+" · saved "+refs.zoneDate:"Upload the master code list; the zone names are kept.";
+  $("refZoneMeta").textContent=refMeta("zones")||"Upload the master code list, or add zone names one by one.";
+  renderRefList("trunks"); renderRefList("zones");
   $("dlTrunks").innerHTML=refs.trunks.map(v=>'<option value="'+esc(v)+'">').join("");
   $("dlZones").innerHTML=refs.zones.map(v=>'<option value="'+esc(v)+'">').join("");
   trunkSet=new Set(refs.trunks.map(v=>v.toLowerCase()));
@@ -716,8 +800,11 @@ function renderRefs(){
 function markUnknown(inp){
   const f=inp.dataset.f, v=inp.value.trim().toLowerCase();
   const set=f==="trunk"?trunkSet:f==="zone"?zoneSet:null;
-  inp.classList.toggle("unknown", !!(set&&set.size&&v&&!set.has(v)));
-  inp.title=inp.classList.contains("unknown")?"Not in your saved "+(f==="trunk"?"trunk list":"master code list"):"";
+  const unk=!!(set&&v&&!set.has(v));
+  inp.classList.toggle("unknown", unk);
+  inp.title=unk?"Not in your saved "+(f==="trunk"?"trunk list":"zone list"):"";
+  const btn=inp.parentElement&&inp.parentElement.querySelector(".save");
+  if(btn) btn.hidden=!unk;
 }
 function manualValidRows(){
   return manRows.filter(r=>(r.trunk||"").trim()&&(r.zone||"").trim())
@@ -732,8 +819,8 @@ function renderMan(focus){
     $("manBody").innerHTML='<tr><td colspan="4"><div class="empty">No routes yet. Click &ldquo;+ Add route&rdquo; to start.</div></td></tr>';
   }else{
     $("manBody").innerHTML=manRows.map((r,i)=>'<tr data-i="'+i+'">'
-      +'<td><input list="dlTrunks" data-f="trunk" value="'+esc(r.trunk||"")+'" placeholder="search trunk&hellip;" autocomplete="off"></td>'
-      +'<td><input list="dlZones" data-f="zone" value="'+esc(r.zone||"")+'" placeholder="search zone&hellip;" autocomplete="off"></td>'
+      +'<td><div class="cell"><input list="dlTrunks" data-f="trunk" value="'+esc(r.trunk||"")+'" placeholder="search trunk&hellip;" autocomplete="off"><button class="save" data-k="trunks" hidden title="Save this trunk to your list">+ save</button></div></td>'
+      +'<td><div class="cell"><input list="dlZones" data-f="zone" value="'+esc(r.zone||"")+'" placeholder="search zone&hellip;" autocomplete="off"><button class="save" data-k="zones" hidden title="Save this zone to your list">+ save</button></div></td>'
       +'<td><input data-f="rate" inputmode="decimal" value="'+esc(r.rate||"")+'" placeholder="0.0000"></td>'
       +'<td class="act"><button class="dup" title="Copy row (same trunk, new zone)">&#x2398;</button><button class="del" title="Remove route">&times;</button></td></tr>').join("");
     $("manBody").querySelectorAll("tr").forEach(tr=>{
@@ -742,6 +829,13 @@ function renderMan(focus){
         markUnknown(inp);
         inp.oninput=()=>{ manRows[i][inp.dataset.f]=inp.value; markUnknown(inp); saveManRows(); updateManCount(); };
         inp.onkeydown=e=>{ if(e.key==="Enter"&&inp.dataset.f==="rate"&&i===manRows.length-1){ e.preventDefault(); addManRow(); } };
+      });
+      tr.querySelectorAll(".save").forEach(b=>b.onclick=()=>{
+        const inp=b.parentElement.querySelector("input");
+        if(addRefName(b.dataset.k,inp.value)){
+          $("toast").textContent='"'+inp.value.trim()+'" saved to your '+(b.dataset.k==="trunks"?"trunk":"zone")+" list";
+          $("toast").classList.add("show"); setTimeout(()=>{$("toast").classList.remove("show");$("toast").textContent="Copied";},1600);
+        }
       });
       tr.querySelector(".dup").onclick=()=>{
         manRows.splice(i+1,0,{trunk:manRows[i].trunk||"",zone:"",rate:""});
@@ -783,13 +877,84 @@ $("refZoneUp").onclick=()=>$("refZoneFile").click();
 $("refTrunkFile").onchange=e=>{ uploadRef("trunks",e.target.files[0]); e.target.value=""; };
 $("refZoneFile").onchange=e=>{ uploadRef("zones",e.target.files[0]); e.target.value=""; };
 $("refTrunkClr").onclick=()=>{
-  if(!refs.trunks.length||!confirm("Clear the saved supplier trunk list?")) return;
-  refs.trunks=[]; refs.trunkFile=""; refs.trunkDate=""; saveRefs(); renderRefs(); renderMan();
+  if(!refs.trunks.length||!confirm("Clear the whole supplier trunk list, including names added by hand?")) return;
+  refs.trunks=[]; refs.trunkExtra=[]; refs.trunkFile=""; refs.trunkDate=""; saveRefs(); renderRefs(); renderMan();
 };
 $("refZoneClr").onclick=()=>{
-  if(!refs.zones.length||!confirm("Clear the saved master code list?")) return;
-  refs.zones=[]; refs.zoneFile=""; refs.zoneDate=""; saveRefs(); renderRefs(); renderMan();
+  if(!refs.zones.length||!confirm("Clear the whole zone list, including names added by hand?")) return;
+  refs.zones=[]; refs.zoneExtra=[]; refs.zoneFile=""; refs.zoneDate=""; saveRefs(); renderRefs(); renderMan();
 };
+// ---------- list export + team package ----------
+function todayISO(){ const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+function saveFile(name,content,type){
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(new Blob([content],{type}));
+  a.download=name; a.click();
+}
+function flash(msg){
+  $("toast").textContent=msg; $("toast").classList.add("show");
+  setTimeout(()=>{$("toast").classList.remove("show");$("toast").textContent="Copied";},1800);
+}
+function exportList(kind){
+  const list=refs[kind];
+  if(!list.length){ alert("This list is empty."); return; }
+  const csv=list.map(v=>/[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v).join("\n");
+  saveFile((kind==="trunks"?"supplier_trunks_":"zone_list_")+todayISO()+".csv", csv, "text/csv");
+  flash(list.length+(kind==="trunks"?" trunks":" zones")+" exported");
+}
+$("refTrunkExp").onclick=()=>exportList("trunks");
+$("refZoneExp").onclick=()=>exportList("zones");
+$("teamExp").onclick=()=>{
+  const pkg={
+    type:"lcr-cleaner-team", version:1, exported:todayISO(),
+    exceptions:{sup:supExc, plan:planExc, atx:$("atx").checked},
+    trunks:refs.trunks, zones:refs.zones
+  };
+  saveFile("lcr_team_package_"+todayISO()+".json", JSON.stringify(pkg,null,2), "application/json");
+  flash("Team package exported");
+};
+$("teamImp").onclick=()=>$("teamFile").click();
+$("teamFile").onchange=e=>{
+  const f=e.target.files[0]; e.target.value=""; if(!f) return;
+  const rd=new FileReader();
+  rd.onload=()=>{
+    let pkg;
+    try{ pkg=JSON.parse(rd.result); }catch(err){ alert("This is not a valid team package file."); return; }
+    if(!pkg||pkg.type!=="lcr-cleaner-team"){ alert("This is not an LCR Cleaner team package."); return; }
+    const t=(pkg.trunks||[]).length, z=(pkg.zones||[]).length;
+    const ex=pkg.exceptions||{};
+    if(!confirm("Import team package from "+(pkg.exported||"unknown date")+"?\n\n"
+      +t+" trunks, "+z+" zones, "+((ex.sup||[]).length+(ex.plan||[]).length)+" exceptions.\n\n"
+      +"This replaces your current trunk list, zone list and exceptions.")) return;
+    const label="team package "+(pkg.exported||"");
+    refs.trunks=uniqueClean(pkg.trunks||[]); refs.trunkExtra=[]; refs.trunkFile=label; refs.trunkDate=todayISO().split("-").reverse().join("/");
+    refs.zones=uniqueClean(pkg.zones||[]);   refs.zoneExtra=[];  refs.zoneFile=label;  refs.zoneDate=refs.trunkDate;
+    if(Array.isArray(ex.sup))  supExc=ex.sup.map(norm);
+    if(Array.isArray(ex.plan)) planExc=ex.plan.map(norm);
+    if(typeof ex.atx==="boolean") $("atx").checked=ex.atx;
+    saveRefs(); saveExc();
+    renderRefs(); renderMan(); renderChips(); runPipeline();
+    flash("Team package imported");
+  };
+  rd.readAsText(f);
+};
+
+for(const [kind,inp,btn,show] of [["trunks","refTrunkAdd","refTrunkAddBtn","refTrunkShow"],["zones","refZoneAdd","refZoneAddBtn","refZoneShow"]]){
+  const doAdd=()=>{
+    const v=$(inp).value.trim(); if(!v) return;
+    if(addRefName(kind,v)){
+      $(inp).value=""; renderRefList(kind);
+      $("toast").textContent='"'+v+'" added';
+    }else{
+      $("toast").textContent='"'+v+'" is already in the list';
+    }
+    $("toast").classList.add("show"); setTimeout(()=>{$("toast").classList.remove("show");$("toast").textContent="Copied";},1600);
+  };
+  $(btn).onclick=doAdd;
+  $(inp).onkeydown=e=>{ if(e.key==="Enter") doAdd(); };
+  $(inp).oninput=()=>renderRefList(kind);
+  $(show).onclick=()=>{ refShow[kind]=!refShow[kind]; renderRefList(kind); };
+}
 $("manAdd").onclick=addManRow;
 $("manClear").onclick=()=>{
   if(!manRows.length||!confirm("Remove all routes from the list?")) return;
