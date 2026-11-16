@@ -78,7 +78,18 @@
   .testbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;padding:9px 10px;background:var(--panel2);border:1px solid var(--line);border-radius:8px}
   .testbar .tlabel{font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);font-weight:600}
   .testbar select,.testbar input{background:var(--bg);border:1px solid var(--line);border-radius:6px;color:var(--ink);padding:7px 9px;font-size:12.5px;font-family:var(--mono)}
-  .testbar #aniValue{width:220px}
+  .testbar #aniValue{width:260px}
+  .msel{position:relative}
+  .mselbtn{display:inline-flex;align-items:center;gap:8px;min-width:150px;max-width:300px;background:var(--bg);border:1px solid var(--line);border-radius:6px;color:var(--ink);padding:7px 10px;font-size:12.5px;cursor:pointer}
+  .mselbtn span{flex:1;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .mselbtn i{font-style:normal;color:var(--dim);font-size:10px}
+  .mselbtn:hover,.mselbtn[aria-expanded="true"]{border-color:var(--amber)}
+  .mselbtn.none span{color:var(--red)}
+  .mselmenu{position:absolute;top:calc(100% + 4px);left:0;z-index:30;min-width:220px;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:5px;box-shadow:0 8px 24px rgba(0,0,0,.35)}
+  .mselmenu label{display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:5px;font-size:12.5px;color:var(--ink);cursor:pointer;user-select:none;white-space:nowrap}
+  .mselmenu label:hover{background:var(--tint)}
+  .mselmenu label.msep{border-top:1px solid var(--line);border-radius:0 0 5px 5px;margin-top:4px;padding-top:9px}
+  .mselmenu input{accent-color:var(--amber);cursor:pointer;margin:0}
   .testbar .tsep{width:1px;height:22px;background:var(--line);margin:0 4px}
   /* views */
   header{align-items:center;flex-wrap:wrap}
@@ -233,12 +244,19 @@
       </div>
       <div id="lcrTestSlot"><div class="testbar" id="testbar">
         <span class="tlabel">Test ANI</span>
-        <label class="anichk"><input type="checkbox" class="ani" value="EU" checked> EU</label>
-        <label class="anichk"><input type="checkbox" class="ani" value="Local"> Local</label>
-        <label class="anichk"><input type="checkbox" class="ani" value="Non Local"> Non Local</label>
-        <label class="anichk"><input type="checkbox" class="ani" value="US"> US</label>
-        <label class="anichk"><input type="checkbox" id="aniSpecific"> Specific</label>
-        <input id="aniValue" placeholder="ANI(s), comma separated" style="display:none">
+        <div class="msel" id="aniSel">
+          <button type="button" class="mselbtn" id="aniBtn" aria-haspopup="true" aria-expanded="false"><span id="aniSummary">EU</span><i>&#9662;</i></button>
+          <div class="mselmenu" id="aniMenu" hidden>
+            <label><input type="checkbox" class="ani" value="EU" checked> EU</label>
+            <label><input type="checkbox" class="ani" value="Local"> Local</label>
+            <label><input type="checkbox" class="ani" value="Non Local"> Non Local</label>
+            <label><input type="checkbox" class="ani" value="US"> US</label>
+            <label><input type="checkbox" class="ani" value="US Toll Free"> US Toll Free</label>
+            <label><input type="checkbox" class="ani" value="China"> China</label>
+            <label class="msep"><input type="checkbox" id="aniSpecific"> Specific (number or note)</label>
+          </div>
+        </div>
+        <input id="aniValue" placeholder="number or note; commas separate several" style="display:none">
         <span class="tsep"></span>
         <span class="tlabel">Test type</span>
         <label class="anichk"><input type="checkbox" id="tQuality" checked> Quality</label>
@@ -1007,7 +1025,7 @@ renderMan();
 function aniList(){
   const list=[...document.querySelectorAll(".ani")].filter(c=>c.checked).map(c=>c.value+" ANI");
   if($("aniSpecific").checked){
-    $("aniValue").value.split(/[,;\s]+/).map(s=>s.trim()).filter(Boolean).forEach(a=>list.push(a));
+    $("aniValue").value.split(/[,;\n]+/).map(s=>s.trim().replace(/\s+/g," ")).filter(Boolean).forEach(a=>list.push(a));
   }
   return list;
 }
@@ -1064,11 +1082,29 @@ function buildTestEmail(rows){
   return {subj,html,text};
 }
 let currentEmail=null;
+function aniSummary(){
+  const picked=[...document.querySelectorAll(".ani")].filter(c=>c.checked).map(c=>c.value);
+  if($("aniSpecific").checked) picked.push("Specific");
+  $("aniSummary").textContent=picked.length?picked.join(", "):"Select ANI";
+  $("aniBtn").classList.toggle("none",!picked.length);
+  $("aniBtn").title=picked.join(", ");
+}
+function aniMenu(open){
+  $("aniMenu").hidden=!open;
+  $("aniBtn").setAttribute("aria-expanded",open?"true":"false");
+}
+$("aniBtn").onclick=e=>{ e.stopPropagation(); aniMenu($("aniMenu").hidden); };
+$("aniMenu").onclick=e=>e.stopPropagation();
+document.addEventListener("click",()=>aniMenu(false));
+document.addEventListener("keydown",e=>{ if(e.key==="Escape") aniMenu(false); });
+document.querySelectorAll(".ani").forEach(c=>c.onchange=aniSummary);
 $("aniSpecific").onchange=()=>{
   const sp=$("aniSpecific").checked;
   $("aniValue").style.display=sp?"":"none";
-  if(sp) $("aniValue").focus();
+  aniSummary();
+  if(sp){ aniMenu(false); $("aniValue").focus(); }
 };
+aniSummary();
 $("testBtn").onclick=()=>{
   const rows = view==="man" ? manualValidRows() : result.filter((r,i)=>selected.has(i));
   if(!rows.length){
@@ -1076,7 +1112,7 @@ $("testBtn").onclick=()=>{
     return;
   }
   if($("aniSpecific").checked && !$("aniValue").value.trim()){
-    alert("Please enter the specific ANI to use."); $("aniValue").focus(); return;
+    alert("Please type the specific ANI or note to use."); $("aniValue").focus(); return;
   }
   if(!aniList().length){ alert("Please select at least one ANI."); return; }
   if(!$("tQuality").checked && !$("tCli").checked && !$("tRtp").checked){ alert("Please select at least one test type (Quality, CLI or RTP)."); return; }
